@@ -222,7 +222,7 @@
   .about { background: var(--bg); }
   .about-grid {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     max-width: 72rem;
     margin: 0 auto;
   }
@@ -337,6 +337,7 @@
   .chapter-media img { width: 100%; display: block; }
   @media (max-width: 640px) {
     .chapter { grid-template-columns: 1fr; gap: 0.8rem; }
+    .about-aside { grid-template-columns: 1fr; }
   }
 
   /* ---------- Principles ---------- */

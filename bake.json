@@ -1,5 +1,5 @@
 {
- "lightMapScale": 3.0404906272888184,
+ "lightMapScale": 3.814624071121216,
  "size": 4096,
  "samples": 256,
  "groups": [
@@ -16,6 +16,7 @@
   "hit_osu",
   "hit_principles",
   "hit_rekindle",
+  "hit_rutland",
   "hit_speaking",
   "hit_tabor",
   "hit_tapjoy",

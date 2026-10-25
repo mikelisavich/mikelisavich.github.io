@@ -179,6 +179,9 @@ const CONTENT = {
   family:{ group:"Shelves", label:"Family photo", accent:"#6b7f5a", year:"Home", img:"assets/photos/family.jpg",
     eyebrow:"Off the clock", title:"The family", role:"",
     body:"<p>The reason for everything else on these shelves.</p>"},
+  rutland:{ group:"Hall", label:"Rutland", accent:"#8a6a3c", year:"Good boy", img:"assets/photos/rutland.jpg", imgPos:"50% 58%", focus:"rutland",
+    eyebrow:"Just outside the doors", title:"Rutland", role:"Senior black lab · head of office security",
+    body:"<p>He doesn't need to come in. He waits right outside the French doors until the last call ends.</p>"},
   oncamera:{ group:"Walls", label:"The prints behind me on calls", accent:"#8f7440", year:"On camera", focus:"webcam",
     eyebrow:"If we've been on a call", title:"The wall behind me", role:"Golf caricatures by Norman Orr",
     body:"<p>This is the view from my webcam. If we've met on a video call, you've seen these six prints behind me. They were a gift from my wife, Alex.</p><ul><li>Disgusted Caddie</li><li>Missed Putt</li><li>A Bad Lie</li><li>Hole in One</li><li>Fresh Air Shot</li><li>In the Rough</li></ul>"},
@@ -233,7 +236,7 @@ const ready=i=>i&&i.complete&&i.naturalWidth>0;
 for(let i=1;i<=6;i++) im(`assets/tex/prints/print${i}.jpg`);
 ['villanova_v','villanova_seal','villanova_wordmark_white','osu_seal','osu_block','fisher_white','tabor_home_white','tabor_footer_white'].forEach(n=>im(`assets/logos/schools/${n}.png`));
 const SL=n=>`assets/logos/schools/${n}.png`;
-['assets/logos/rekindle_flame.png','assets/logos/hubspot_white.png','assets/logos/schools/tabor_crest.jpg','assets/photos/family.jpg'].forEach(im);
+['assets/logos/rekindle_flame.png','assets/logos/hubspot_white.png','assets/logos/schools/tabor_crest.jpg','assets/photos/family.jpg','assets/photos/rutland.jpg'].forEach(im);
 
 function T(g,s,x,y,font,color,o={}){ g.font=font; g.fillStyle=color; g.textAlign=o.align||'left'; g.textBaseline=o.base||'alphabetic';
   if('letterSpacing' in g) g.letterSpacing=(o.ls||0)+'px'; g.globalAlpha=o.alpha??1; g.fillText(s,x,y); g.globalAlpha=1; if('letterSpacing' in g) g.letterSpacing='0px'; return g.measureText(s).width; }
@@ -404,6 +407,7 @@ const SLIDES={
   cgopen(g,w,h){ photoSlide(g,w,h,'assets/photos/cg-open.jpg','The CG Open','$75K+ raised','For First Tee MA · founded at CarGurus','#2fbf71'); },
   offclock(g,w,h){ photoSlide(g,w,h,'assets/photos/golf-sunset.jpg','Off the clock','Home base: Boston','Chasing pars, sunsets optional','#e8c98a'); },
   couple(g,w,h){ photoSlide(g,w,h,'assets/photos/beach.jpg','Off the clock','Alex and me','','#e8c98a'); },
+  rutland(g,w,h){ photoSlide(g,w,h,'assets/photos/rutland.jpg','Just outside the doors','Rutland','Head of office security','#e8c98a'); },
   family(g,w,h){ photoSlide(g,w,h,'assets/photos/family.jpg','Off the clock','The family','','#e8c98a'); },
 };
 function school(g,w,h,bgc,fg,acc,eb,big,lines,deco){
@@ -474,7 +478,7 @@ function stepLights(now){ if(litDone||litStart===null) return;
 const interactive=[], keyRoots={};
 const manager=new THREE.LoadingManager();
 manager.onProgress=(u,l,t)=>{ ldBar.style.width=Math.round(l/t*100)+'%'; };
-const BUILD='b32';   /* bump on every rebake so phones never reuse a cached room */
+const BUILD='b33';   /* bump on every rebake so phones never reuse a cached room */
 const MODEL_URL=(window.OFFICE_MODEL||'office.wasm')+'?v='+BUILD;   /* the GLB, under a name the artifact host serves as raw bytes */
 const loader=new THREE.GLTFLoader(manager), texLoader=new THREE.TextureLoader(manager);
 let lightMap=null, LMS=2.0;
@@ -581,13 +585,14 @@ function introSweep(){ if(reduce) return; const keys=Object.keys(keyRoots); let 
 
 const TVPOS=V(X1-0.04,1.50,-0.98);
 const FOCI={ tv:{pos:V(-0.55,1.42,-0.98), target:V(X1,1.24,-0.98)},
-             webcam:{pos:V(-0.07,1.37,0.28), target:V(X0,1.12,0.28)} };
+             webcam:{pos:V(-0.07,1.37,0.28), target:V(X0,1.12,0.28)},
+             rutland:{pos:V(0.2,1.35,0.6), target:V(0.15,0.55,1.62)} };
 function fly(to,done){ moving(); flying={from:{pos:camera.position.clone(),target:controls.target.clone()},to,start:performance.now(),done}; controls.enabled=false; roomLimits(false); }
 function open(key){
   if(!focus) returnTo={pos:camera.position.clone(),target:controls.target.clone()};
   const c=CONTENT[key]; drawTV(key); hint.style.opacity=0;
   card.style.setProperty('--accent',c.accent);
-  cardIn.innerHTML=`${c.img?`<img src="${c.img}" alt="">`:''}<div class="eyebrow">${c.eyebrow}</div><h2>${c.title}</h2>${c.role?`<p class="role">${c.role}</p>`:''}${c.body}
+  cardIn.innerHTML=`${c.img?`<img src="${c.img}" alt=""${c.imgPos?` style="object-position:${c.imgPos}"`:''}>`:''}<div class="eyebrow">${c.eyebrow}</div><h2>${c.title}</h2>${c.role?`<p class="role">${c.role}</p>`:''}${c.body}
     <div class="row">${c.group==='Career'?`<div class="nav"><button id="prevCh" ${CAREER.indexOf(key)===0?'disabled':''}>← Earlier</button><button id="nextCh" ${CAREER.indexOf(key)===CAREER.length-1?'disabled':''}>Later →</button></div>`:'<small>Esc or Back returns you to where you were</small>'}<button class="close" id="closeCard">Close</button></div>`;
   document.getElementById('closeCard').onclick=()=>closeAndReturn();
   if(c.group==='Career'){ const i=CAREER.indexOf(key);
@@ -605,7 +610,7 @@ backBtn.onclick=()=>closeAndReturn();
 addEventListener('keydown',e=>{ if(e.key==='Escape'){ if(!menu.hidden) toggleMenu(false); else if(focus||card.classList.contains('on')) closeAndReturn(); }});
 
 const menu=document.getElementById('menu'), menuBtn=document.getElementById('menuBtn');
-const groups={Career:'Book stack · career',Shelves:'Shelves',Walls:'Walls',Desk:'Desk'};
+const groups={Career:'Book stack · career',Shelves:'Shelves',Walls:'Walls',Desk:'Desk',Hall:'Outside the doors'};
 menu.innerHTML=Object.entries(groups).map(([g,t])=>`<h3>${t}</h3>`+Object.entries(CONTENT).filter(([,c])=>c.group===g)
   .map(([k,c])=>`<button data-k="${k}">${c.title}<span>${c.label}</span></button>`).join('')).join('');
 menu.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; toggleMenu(false); open(b.dataset.k); });

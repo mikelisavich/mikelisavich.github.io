@@ -1,5 +1,6 @@
 {
- "lightMapScale": 3.8372411727905273,
+ "lightMapScale": 3.799853563308716,
+ "nightScale": 4.550951957702637,
  "size": 4096,
  "samples": 256,
  "groups": [
@@ -21,6 +22,7 @@
   "hit_tabor",
   "hit_tapjoy",
   "hit_villanova",
+  "shelf_glow",
   "static",
   "tv_screen"
  ]

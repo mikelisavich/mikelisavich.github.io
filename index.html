@@ -35,6 +35,10 @@ body{font-family:var(--body);font-size:15px}
 #nameplate h1{font-family:var(--display);font-weight:400;font-size:28px;line-height:1;margin:0;letter-spacing:.01em;
   text-shadow:0 1px 12px rgba(0,0,0,.45)}
 #nameplate p{margin:0;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#d8cfbd;text-shadow:0 1px 8px rgba(0,0,0,.6)}
+.tod{align-self:flex-start;margin-top:6px;background:rgba(20,25,34,.55);color:#e9e1cf;border:1px solid rgba(232,201,138,.35);border-radius:999px;
+  padding:3px 10px;font-size:11px;letter-spacing:.04em;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);cursor:pointer;white-space:nowrap}
+.tod:hover{border-color:rgba(232,201,138,.7)}
+.tod b{font-weight:600;color:#e8c98a}
 #tools{top:calc(14px + env(safe-area-inset-top,0px));right:max(16px, env(safe-area-inset-right,0px));display:flex;gap:8px}
 button{font:inherit;cursor:pointer}
 .pill{background:rgba(20,25,34,.62);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:var(--cream);
@@ -109,7 +113,7 @@ button{font:inherit;cursor:pointer}
 <noscript><p style="color:#fff;padding:24px">This site needs JavaScript. <a href="classic/" style="color:#e8c98a">Open the classic site</a>.</p></noscript>
 <div id="stage" aria-label="A 3D model of Mike Lisavich's home office. Use the Index button for a list of everything you can open."></div>
 
-<div class="chrome" id="nameplate"><h1>Mike Lisavich</h1><p>Product · Boston</p></div>
+<div class="chrome" id="nameplate"><h1>Mike Lisavich</h1><p>Product · Boston</p><button id="todChip" class="tod" type="button" aria-label="Time of day in Sudbury. Tap to preview day or night."></button></div>
 <div class="chrome" id="tools">
   <button class="pill" id="backBtn" hidden>Back to room</button>
   <button class="pill" id="musicBtn" aria-pressed="false" title="Play an original golf tune" aria-label="Music">&#9835;</button>
@@ -459,12 +463,61 @@ const lapTex=screenTex(1024,640,(g,w,h)=>{
 });
 
 /* ------------------------------------------------------------------ opening: the room starts dark, then someone flips the switch */
-const LIT=[], GLOWS=[], SCREENS=[]; let litStart=null, litDone=false;
+const LIT=[], GLOWS=[], SCREENS=[]; let litStart=null, litDone=false, LAMPF=0;
 function SCREEN(mat){ SCREENS.push(mat); return mat; }
+/* ---- time of day in Sudbury, MA: sun altitude from the visitor's clock -> a night factor that blends two baked lightmaps */
+const SUDBURY={lat:42.383,lon:-71.416}, NIGHT_BOOST=0.85;
+const LMU={lightMap2:{value:null}, lmMix:{value:0}, lmK:{value:1}};
+const TOD={N:0, W:0, mode:'live'};
+function sunAltitude(date){
+  const r=Math.PI/180, d=(date.getTime()-Date.UTC(2000,0,1,12))/864e5;
+  const g=(357.529+0.98560028*d)*r, q=280.459+0.98564736*d;
+  const L=(q+1.915*Math.sin(g)+0.020*Math.sin(2*g))*r, e=(23.439-0.00000036*d)*r;
+  const ra=Math.atan2(Math.cos(e)*Math.sin(L),Math.cos(L)), dec=Math.asin(Math.sin(e)*Math.sin(L));
+  const gmst=((18.697374558+24.06570982441908*d)%24+24)%24, H=(gmst*15+SUDBURY.lon)*r-ra, la=SUDBURY.lat*r;
+  return Math.asin(Math.sin(la)*Math.sin(dec)+Math.cos(la)*Math.cos(dec)*Math.cos(H))/r; }
+const sstep=(a,b,x)=>{ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
+function todFactors(){
+  if(TOD.mode==='day') return {N:0,W:0}; if(TOD.mode==='night') return {N:1,W:0};
+  const alt=sunAltitude(new Date());
+  return {N:sstep(3,-7,alt), W:Math.exp(-Math.pow((alt-1.5)/5,2)), alt}; }
+const TINT_DUSK=new THREE.Color(1,0.66,0.45), TINT_NIGHT=new THREE.Color(0.22,0.3,0.78), WHITE=new THREE.Color(1,1,1), tmpC=new THREE.Color();
+function glowMult(kind){
+  const N=TOD.N, W=TOD.W*(1-N);
+  if(kind==='view') return 1-0.975*N;
+  if(kind==='living') return 1-0.35*N;
+  if(kind==='shelf') return N;
+  if(kind==='lamp') return 1+0.6*N;
+  return 1; }
+function tintGlows(){
+  const N=TOD.N, W=TOD.W*(1-N);
+  GLOWS.forEach(g=>{ const [mt,,kind]=g;
+    if(kind==='view'){ tmpC.copy(WHITE).lerp(TINT_DUSK,W*0.8).lerp(TINT_NIGHT,N); mt.emissive.copy(tmpC); mt.color.copy(tmpC).multiplyScalar(1-0.9*N); }
+    if(kind==='living'){ tmpC.copy(WHITE).lerp(new THREE.Color(1,0.84,0.62),N*0.8); mt.emissive.copy(tmpC); } }); }
 function lightsUp(f){            // f: 0 = lights off (a little window light), 1 = everything on
-  const room=0.04+0.96*f; LIT.forEach(mt=>mt.lightMapIntensity=LMS*room);
-  GLOWS.forEach(([mt,e])=>mt.emissiveIntensity=e*f);
-  renderer.toneMappingExposure=0.45+0.67*f; }
+  LAMPF=f; const room=0.04+0.96*f; LIT.forEach(mt=>{ mt.lightMapIntensity=LMS*room; if(mt.userData.env0!==undefined) mt.envMapIntensity=mt.userData.env0*(1-0.6*TOD.N); });
+  GLOWS.forEach(([mt,e,kind])=>mt.emissiveIntensity=e*(kind==='view'||kind==='living'?Math.max(f,0.15):f)*glowMult(kind));
+  renderer.toneMappingExposure=(0.45+0.67*f)*(1-0.1*TOD.N); }
+function applyTOD(){
+  const t=todFactors(); TOD.N=t.N; TOD.W=t.W; LMU.lmMix.value=TOD.N; tintGlows(); lightsUp(LAMPF); todLabel(t); }
+function patchLM(sh){
+  sh.uniforms.lightMap2=LMU.lightMap2; sh.uniforms.lmMix=LMU.lmMix; sh.uniforms.lmK=LMU.lmK;
+  sh.fragmentShader='uniform sampler2D lightMap2;\nuniform float lmMix;\nuniform float lmK;\n'+sh.fragmentShader.replace('#include <lights_fragment_maps>',
+    THREE.ShaderChunk.lights_fragment_maps.replace('vec4 lightMapTexel = texture2D( lightMap, vUv2 );',
+      'vec4 lightMapTexel = mix( texture2D( lightMap, vUv2 ), texture2D( lightMap2, vUv2 ) * lmK, lmMix );')); }
+const todChip=document.getElementById('todChip');
+function todLabel(t){
+  const time=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'}).format(new Date()).toLowerCase().replace(' ','\u202f');
+  if(TOD.mode==='live'){ const icon=t.N>0.6?'☾':(t.W>0.35?'◐':'☀'); todChip.innerHTML=`${icon} ${time} in Sudbury`; todChip.title='Lighting follows the real time in Sudbury, MA. Tap to preview.'; }
+  else todChip.innerHTML=`${TOD.mode==='night'?'☾ Night':'☀ Day'} preview · <b>tap for live</b>`; }
+todChip.addEventListener('click',e=>{ e.stopPropagation(); TOD.mode={live:'night',night:'day',day:'live'}[TOD.mode]; fadeTOD(); });
+function fadeTOD(){ const from={N:TOD.N,W:TOD.W}, to=todFactors(), t0=performance.now();
+  const step=now=>{ const k=Math.min(1,(now-t0)/1200), e=k*k*(3-2*k); TOD.N=from.N+(to.N-from.N)*e; TOD.W=from.W+(to.W-from.W)*e;
+    LMU.lmMix.value=TOD.N; tintGlows(); lightsUp(LAMPF); todLabel(to); if(k<1) requestAnimationFrame(step); };
+  requestAnimationFrame(step); }
+{ const q=new URLSearchParams(location.search).get('tod'); if(q==='night'||q==='day') TOD.mode=q; }
+setInterval(()=>{ if(TOD.mode==='live') applyTOD(); },60000);
+window.__office={GLOWS,TOD,LMU};
 function screensUp(s){ SCREENS.forEach(mt=>mt.color.setScalar(0.04+0.96*s)); }
 function lightCurve(t){          // seconds since the switch: a quick flicker, then a warm ramp
   if(t<0) return 0; if(t<0.08) return 0.7; if(t<0.16) return 0.15; if(t<0.24) return 0.85; if(t<0.32) return 0.45;
@@ -478,16 +531,19 @@ function stepLights(now){ if(litDone||litStart===null) return;
 const interactive=[], keyRoots={};
 const manager=new THREE.LoadingManager();
 manager.onProgress=(u,l,t)=>{ ldBar.style.width=Math.round(l/t*100)+'%'; };
-const BUILD='b36';   /* bump on every rebake so phones never reuse a cached room */
+const BUILD='b37';   /* bump on every rebake so phones never reuse a cached room */
 const MODEL_URL=(window.OFFICE_MODEL||'office.wasm')+'?v='+BUILD;   /* the GLB, under a name the artifact host serves as raw bytes */
 const loader=new THREE.GLTFLoader(manager), texLoader=new THREE.TextureLoader(manager);
 let lightMap=null, LMS=2.0;
 Promise.all([
   fetch('bake.json?v='+BUILD).then(r=>r.json()).catch(()=>({lightMapScale:2})),
   new Promise((res,rej)=>texLoader.load('lightmap.jpg?v='+BUILD,res,undefined,rej)),
+  new Promise(res=>texLoader.load('lightmap_night.jpg?v='+BUILD,res,undefined,()=>res(null))),
   new Promise((res,rej)=>loader.load(MODEL_URL,res,xhr=>{ if(xhr.total) ldBar.style.width=Math.round(xhr.loaded/xhr.total*90)+'%'; },rej))
-]).then(([bake,lm,gltf])=>{
+]).then(([bake,lm,lmN,gltf])=>{
   LMS=bake.lightMapScale||2; lightMap=lm; lm.encoding=THREE.sRGBEncoding; lm.flipY=false;
+  if(lmN){ lmN.encoding=THREE.sRGBEncoding; lmN.flipY=false; LMU.lightMap2.value=lmN; LMU.lmK.value=(bake.nightScale||LMS)/LMS*NIGHT_BOOST; }
+  else { LMU.lightMap2.value=lm; LMU.lmK.value=0.35; }
   const root=gltf.scene; scene.add(root);
   root.traverse(o=>{
     if(!o.isMesh) return;
@@ -499,16 +555,21 @@ Promise.all([
       if(/MonitorScreen/.test(m.name)) return SCREEN(new THREE.MeshBasicMaterial({map:monTex,toneMapped:false}));
       if(/LaptopScreen/.test(m.name)) return SCREEN(new THREE.MeshBasicMaterial({map:lapTex,toneMapped:false}));
       if(name==='tv_screen'){ return SCREEN(new THREE.MeshBasicMaterial({map:tvTex,toneMapped:false})); }
-      if(name==='emissive'){ if(/LampShade/.test(m.name)) m.emissiveIntensity=0.45; GLOWS.push([m,m.emissiveIntensity]); return m; }
+      if(name==='shelf_glow'){ const g=m.clone(); g.emissiveIntensity=Math.max(g.emissiveIntensity,3); GLOWS.push([g,g.emissiveIntensity,'shelf']); return g; }
+      if(name==='emissive'){ if(/LampShade/.test(m.name)) m.emissiveIntensity=0.45;
+        const kind=/ViewBack|ViewRight/.test(m.name)?'view':/ViewLiving/.test(m.name)?'living':/LampShade/.test(m.name)?'lamp':'other';
+        GLOWS.push([m,m.emissiveIntensity,kind]); return m; }
       const k = ud.key ? m.clone() : m;          // clickable things get their own materials for the hover glow
       if(/HaleNavy/.test(k.name)) k.color.multiplyScalar(1.55);
-      k.lightMap=lightMap; k.lightMapIntensity=LMS; if(!LIT.includes(k)) LIT.push(k); k.envMapIntensity = k.metalness>0.5 ? 0.9 : 0.1;
+      k.lightMap=lightMap; k.lightMapIntensity=LMS; if(!LIT.includes(k)) LIT.push(k); k.envMapIntensity = k.metalness>0.5 ? 0.9 : 0.1; k.userData.env0=k.envMapIntensity;
+      k.onBeforeCompile=patchLM; k.customProgramCacheKey=()=>'lm2';
       k.needsUpdate=true; return k;
     });
     o.material=Array.isArray(o.material)?fixed:fixed[0];
     if(ud.key){ keyRoots[ud.key]=grp; if(!interactive.includes(grp)) interactive.push(grp); }
   });
   drawTV(null); root.updateMatrixWorld(true); buildHots(); camera.updateMatrixWorld(); fullOcc();
+  { const t=todFactors(); TOD.N=t.N; TOD.W=t.W; LMU.lmMix.value=TOD.N; tintGlows(); todLabel(t); }
   lightsUp(1e-3);
   // hold the loading card for at least ~2.8s so "Turning on the lights…" lands, then reveal the dark room
   const wait=Math.max(0,2800-performance.now());

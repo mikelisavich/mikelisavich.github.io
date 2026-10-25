@@ -1,0 +1,26 @@
+{
+ "lightMapScale": 3.0404906272888184,
+ "size": 4096,
+ "samples": 256,
+ "groups": [
+  "emissive",
+  "glass",
+  "hit_cargurus",
+  "hit_cgopen",
+  "hit_contact",
+  "hit_couple",
+  "hit_family",
+  "hit_klaviyo",
+  "hit_offclock",
+  "hit_oncamera",
+  "hit_osu",
+  "hit_principles",
+  "hit_rekindle",
+  "hit_speaking",
+  "hit_tabor",
+  "hit_tapjoy",
+  "hit_villanova",
+  "static",
+  "tv_screen"
+ ]
+}

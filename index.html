@@ -578,7 +578,7 @@ function stepLights(now){ if(litDone||litStart===null) return;
 const interactive=[], keyRoots={};
 const manager=new THREE.LoadingManager();
 manager.onProgress=(u,l,t)=>{ ldBar.style.width=Math.round(l/t*100)+'%'; };
-const BUILD='b40';   /* bump on every rebake so phones never reuse a cached room */
+const BUILD='b41';   /* bump on every rebake so phones never reuse a cached room */
 const MODEL_URL=(window.OFFICE_MODEL||'office.wasm')+'?v='+BUILD;   /* the GLB, under a name the artifact host serves as raw bytes */
 const loader=new THREE.GLTFLoader(manager), texLoader=new THREE.TextureLoader(manager);
 let lightMap=null, LMS=2.0;
@@ -608,6 +608,8 @@ Promise.all([
         if(kind==='living'){ m.onBeforeCompile=patchLiving; m.customProgramCacheKey=()=>'liv2';
           texLoader.load('assets/photos/living_night.jpg?v='+BUILD,t=>{ t.encoding=THREE.sRGBEncoding; t.flipY=false; LIVU.map2.value=t; m.needsUpdate=true; }); }
         GLOWS.push([m,m.emissiveIntensity,kind]); return m; }
+      if(/^Material_0/.test(m.name)){   // photo-scanned props (glove, Rutland): lit straight from the room's HDR capture, not the lightmap
+        const sc=m.clone(); sc.envMapIntensity=1.15; sc.userData.scan=true; return sc; }
       const k = ud.key ? m.clone() : m;          // clickable things get their own materials for the hover glow
       if(/HaleNavy/.test(k.name)) k.color.multiplyScalar(1.55);
       k.lightMap=lightMap; k.lightMapIntensity=LMS; if(!LIT.includes(k)) LIT.push(k); k.envMapIntensity = k.metalness>0.5 ? 0.9 : 0.1; k.userData.env0=k.envMapIntensity;

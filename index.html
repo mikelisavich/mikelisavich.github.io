@@ -106,6 +106,15 @@ button{font:inherit;cursor:pointer}
 .card .nav button:disabled{opacity:.35;cursor:default}
 @media (prefers-reduced-motion:reduce){ .hot.ping::after{animation:none} #hots{transition:none} }
 
+
+/* camera finish: soft lens vignette + fine film grain over the 3D view (below the UI) */
+#film{position:fixed;inset:0;z-index:2;pointer-events:none;
+  background:radial-gradient(120% 95% at 50% 46%, rgba(0,0,0,0) 58%, rgba(8,6,4,.34) 100%)}
+#film::after{content:"";position:absolute;inset:-50%;opacity:.07;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 1 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  animation:grain 1.2s steps(6) infinite}
+@keyframes grain{0%{transform:translate(0,0)}20%{transform:translate(-3%,2%)}40%{transform:translate(2%,-3%)}60%{transform:translate(-2%,-1%)}80%{transform:translate(3%,3%)}100%{transform:translate(0,0)}}
+@media (prefers-reduced-motion:reduce){ #film::after{animation:none} }
 </style>
 
 </head>
@@ -113,6 +122,7 @@ button{font:inherit;cursor:pointer}
 <noscript><p style="color:#fff;padding:24px">This site needs JavaScript. <a href="classic/" style="color:#e8c98a">Open the classic site</a>.</p></noscript>
 <div id="stage" aria-label="A 3D model of Mike Lisavich's home office. Use the Index button for a list of everything you can open."></div>
 
+<div id="film" aria-hidden="true"></div>
 <div class="chrome" id="nameplate"><h1>Mike Lisavich</h1><p>Product · Boston</p><button id="todChip" class="tod" type="button" aria-label="Time of day in Sudbury. Tap to preview day or night."></button></div>
 <div class="chrome" id="tools">
   <button class="pill" id="backBtn" hidden>Back to room</button>
@@ -143,6 +153,7 @@ button{font:inherit;cursor:pointer}
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/environments/RoomEnvironment.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/RGBELoader.js"></script>
 <script>
 (() => {
 /* ------------------------------------------------------------------ content (from lisavich.com and Mike) */
@@ -495,11 +506,11 @@ function tintGlows(){
     if(kind==='view'){ tmpC.copy(WHITE).lerp(TINT_DUSK,W*0.8).lerp(TINT_NIGHT,N); mt.emissive.copy(tmpC); mt.color.copy(tmpC).multiplyScalar(1-0.9*N); }
     }); }
 function lightsUp(f){            // f: 0 = lights off (a little window light), 1 = everything on
-  LAMPF=f; const room=0.04+0.96*f; LIT.forEach(mt=>{ mt.lightMapIntensity=LMS*room; if(mt.userData.env0!==undefined) mt.envMapIntensity=mt.userData.env0*(1-0.6*TOD.N); });
+  LAMPF=f; const room=0.04+0.96*f; LIT.forEach(mt=>{ mt.lightMapIntensity=LMS*room; if(mt.userData.env0!==undefined) mt.envMapIntensity=mt.userData.env0*(PROBE.on.value?1:(1-0.6*TOD.N)); });
   GLOWS.forEach(([mt,e,kind])=>mt.emissiveIntensity=e*(kind==='view'||kind==='living'?Math.max(f,0.15):f)*glowMult(kind));
   renderer.toneMappingExposure=(0.45+0.67*f)*(1-0.1*TOD.N); }
 function applyTOD(){
-  const t=todFactors(); TOD.N=t.N; TOD.W=t.W; LMU.lmMix.value=TOD.N; tintGlows(); lightsUp(LAMPF); todLabel(t); }
+  const t=todFactors(); TOD.N=t.N; TOD.W=t.W; LMU.lmMix.value=TOD.N; tintGlows(); setEnv(); lightsUp(LAMPF); todLabel(t); }
 const LIVU={map2:{value:null}};
 function patchLiving(sh){   // family-room photo: crossfade day -> night photo with the same night factor
   sh.uniforms.map2=LIVU.map2; sh.uniforms.lmMix=LMU.lmMix;
@@ -507,11 +518,40 @@ function patchLiving(sh){   // family-room photo: crossfade day -> night photo w
   sh.fragmentShader='uniform sampler2D map2;\nuniform float lmMix;\n'+sh.fragmentShader
     .replace('#include <map_fragment>',swap('map_fragment','texture2D( map, vUv )','mix( texture2D( map, vUv ), texture2D( map2, vUv ), lmMix )'))
     .replace('#include <emissivemap_fragment>',swap('emissivemap_fragment','texture2D( emissiveMap, vUv )','mix( texture2D( emissiveMap, vUv ), texture2D( map2, vUv ), lmMix )')); }
+/* Reflections: an HDR capture of this very room (day + night), box-projected so the floor and desk mirror the real
+   windows in the right places. Diffuse light comes only from the baked lightmaps, so image-based diffuse is switched off. */
+const PROBE={bmin:{value:new THREE.Vector3(-1.524,0,-1.829)}, bmax:{value:new THREE.Vector3(1.524,2.438,1.829)}, pos:{value:new THREE.Vector3(0.55,1.35,0.55)}, on:{value:0}};
+const ENV={day:null, night:null, room:null};
+function setEnv(){ if(!ENV.day) return; const want=TOD.N>0.5?(ENV.night||ENV.day):ENV.day; if(scene.environment!==want) scene.environment=want; }
+const BOXPROJ=`
+varying vec3 vWorldPos; uniform vec3 probeMin; uniform vec3 probeMax; uniform vec3 probePos; uniform float probeOn;
+vec3 boxProject(vec3 v){
+  vec3 n=normalize(v); vec3 rmax=(probeMax-vWorldPos)/n; vec3 rmin=(probeMin-vWorldPos)/n;
+  vec3 r=vec3(n.x>0.?rmax.x:rmin.x, n.y>0.?rmax.y:rmin.y, n.z>0.?rmax.z:rmin.z);
+  float t=min(min(r.x,r.y),r.z); return vWorldPos+n*max(t,0.)-probePos; }
+`;
 function patchLM(sh){
   sh.uniforms.lightMap2=LMU.lightMap2; sh.uniforms.lmMix=LMU.lmMix; sh.uniforms.lmK=LMU.lmK;
-  sh.fragmentShader='uniform sampler2D lightMap2;\nuniform float lmMix;\nuniform float lmK;\n'+sh.fragmentShader.replace('#include <lights_fragment_maps>',
+  sh.uniforms.probeMin=PROBE.bmin; sh.uniforms.probeMax=PROBE.bmax; sh.uniforms.probePos=PROBE.pos; sh.uniforms.probeOn=PROBE.on;
+  sh.vertexShader='varying vec3 vWorldPos;\n'+sh.vertexShader.replace('#include <worldpos_vertex>','#include <worldpos_vertex>\nvWorldPos=(modelMatrix*vec4(transformed,1.0)).xyz;');
+  const envChunk=THREE.ShaderChunk.envmap_physical_pars_fragment
+    .replace('vec3 worldNormal = inverseTransformDirection( normal, viewMatrix );\n\t\t\tvec4 envMapColor = textureCubeUV( envMap, worldNormal, 1.0 );\n\t\t\treturn PI * envMapColor.rgb * envMapIntensity;',
+             'vec3 worldNormal = inverseTransformDirection( normal, viewMatrix );\n\t\t\tvec4 envMapColor = textureCubeUV( envMap, worldNormal, 1.0 );\n\t\t\treturn PI * envMapColor.rgb * envMapIntensity * (1.0 - probeOn);')
+    .replace('reflectVec = inverseTransformDirection( reflectVec, viewMatrix );','reflectVec = inverseTransformDirection( reflectVec, viewMatrix );\n\t\t\tif ( probeOn > 0.5 ) reflectVec = boxProject( reflectVec );');
+  sh.fragmentShader='uniform sampler2D lightMap2;\nuniform float lmMix;\nuniform float lmK;\n'+BOXPROJ+sh.fragmentShader
+    .replace('#include <envmap_physical_pars_fragment>',envChunk)
+    .replace('#include <lights_fragment_maps>',
     THREE.ShaderChunk.lights_fragment_maps.replace('vec4 lightMapTexel = texture2D( lightMap, vUv2 );',
       'vec4 lightMapTexel = mix( texture2D( lightMap, vUv2 ), texture2D( lightMap2, vUv2 ) * lmK, lmMix );')); }
+function loadProbes(){
+  if(!THREE.RGBELoader) return;
+  const rl=new THREE.RGBELoader(); rl.setDataType(THREE.HalfFloatType);
+  const one=(f)=>new Promise(res=>rl.load(f+'?v='+BUILD,t=>{ t.mapping=THREE.EquirectangularReflectionMapping; const e=pmrem.fromEquirectangular(t).texture; t.dispose(); res(e); },undefined,()=>res(null)));
+  const ext=window.OFFICE_MODEL?'.hdr':'_hdr.wasm';   /* the artifact host only serves known types, so the HDRs ride as .wasm there */
+  Promise.all([one('env_day'+ext),one('env_night'+ext)]).then(([d,n])=>{
+    if(!d) return; ENV.day=d; ENV.night=n; PROBE.on.value=1;
+    LIT.forEach(mt=>{ mt.userData.env0=mt.metalness>0.5?1.0:1.0; });   // specular only now, so physically 1.0
+    setEnv(); lightsUp(LAMPF); }); }
 const todChip=document.getElementById('todChip');
 function todLabel(t){
   const time=new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'}).format(new Date()).toLowerCase().replace(' ','\u202f');
@@ -520,11 +560,11 @@ function todLabel(t){
 todChip.addEventListener('click',e=>{ e.stopPropagation(); TOD.mode={live:'night',night:'day',day:'live'}[TOD.mode]; fadeTOD(); });
 function fadeTOD(){ const from={N:TOD.N,W:TOD.W}, to=todFactors(), t0=performance.now();
   const step=now=>{ const k=Math.min(1,(now-t0)/1200), e=k*k*(3-2*k); TOD.N=from.N+(to.N-from.N)*e; TOD.W=from.W+(to.W-from.W)*e;
-    LMU.lmMix.value=TOD.N; tintGlows(); lightsUp(LAMPF); todLabel(to); if(k<1) requestAnimationFrame(step); };
+    LMU.lmMix.value=TOD.N; tintGlows(); setEnv(); lightsUp(LAMPF); todLabel(to); if(k<1) requestAnimationFrame(step); };
   requestAnimationFrame(step); }
 { const q=new URLSearchParams(location.search).get('tod'); if(q==='night'||q==='day') TOD.mode=q; }
 setInterval(()=>{ if(TOD.mode==='live') applyTOD(); },60000);
-window.__office={GLOWS,TOD,LMU};
+window.__office={GLOWS,TOD,LMU,PROBE,ENV,LIT};
 function screensUp(s){ SCREENS.forEach(mt=>mt.color.setScalar(0.04+0.96*s)); }
 function lightCurve(t){          // seconds since the switch: a quick flicker, then a warm ramp
   if(t<0) return 0; if(t<0.08) return 0.7; if(t<0.16) return 0.15; if(t<0.24) return 0.85; if(t<0.32) return 0.45;
@@ -538,7 +578,7 @@ function stepLights(now){ if(litDone||litStart===null) return;
 const interactive=[], keyRoots={};
 const manager=new THREE.LoadingManager();
 manager.onProgress=(u,l,t)=>{ ldBar.style.width=Math.round(l/t*100)+'%'; };
-const BUILD='b39';   /* bump on every rebake so phones never reuse a cached room */
+const BUILD='b40';   /* bump on every rebake so phones never reuse a cached room */
 const MODEL_URL=(window.OFFICE_MODEL||'office.wasm')+'?v='+BUILD;   /* the GLB, under a name the artifact host serves as raw bytes */
 const loader=new THREE.GLTFLoader(manager), texLoader=new THREE.TextureLoader(manager);
 let lightMap=null, LMS=2.0;
@@ -579,6 +619,7 @@ Promise.all([
   });
   drawTV(null); root.updateMatrixWorld(true); buildHots(); camera.updateMatrixWorld(); fullOcc();
   { const t=todFactors(); TOD.N=t.N; TOD.W=t.W; LMU.lmMix.value=TOD.N; tintGlows(); todLabel(t); }
+  loadProbes();
   lightsUp(1e-3);
   // hold the loading card for at least ~2.8s so "Turning on the lights…" lands, then reveal the dark room
   const wait=Math.max(0,2800-performance.now());

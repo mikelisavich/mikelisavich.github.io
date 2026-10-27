@@ -213,6 +213,7 @@ const stage=document.getElementById('stage'), ldMsg=document.getElementById('ldM
 let renderer;
 try { renderer=new THREE.WebGLRenderer({antialias:true}); } catch(e){ document.getElementById('fallback').hidden=false; document.getElementById('loading').classList.add('done'); return; }
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+const MAXANISO=Math.min(16,renderer.capabilities.getMaxAnisotropy());   // keeps rug, floor, wallpaper and leather crisp at grazing angles
 renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.12;
 stage.appendChild(renderer.domElement);
@@ -578,7 +579,7 @@ function stepLights(now){ if(litDone||litStart===null) return;
 const interactive=[], keyRoots={};
 const manager=new THREE.LoadingManager();
 manager.onProgress=(u,l,t)=>{ ldBar.style.width=Math.round(l/t*100)+'%'; };
-const BUILD='b43';   /* bump on every rebake so phones never reuse a cached room */
+const BUILD='b44';   /* bump on every rebake so phones never reuse a cached room */
 const MODEL_URL=(window.OFFICE_MODEL||'office.wasm')+'?v='+BUILD;   /* the GLB, under a name the artifact host serves as raw bytes */
 const loader=new THREE.GLTFLoader(manager), texLoader=new THREE.TextureLoader(manager);
 let lightMap=null, LMS=2.0;
@@ -588,7 +589,7 @@ Promise.all([
   new Promise(res=>texLoader.load('lightmap_night.jpg?v='+BUILD,res,undefined,()=>res(null))),
   new Promise((res,rej)=>loader.load(MODEL_URL,res,xhr=>{ if(xhr.total) ldBar.style.width=Math.round(xhr.loaded/xhr.total*90)+'%'; },rej))
 ]).then(([bake,lm,lmN,gltf])=>{
-  LMS=bake.lightMapScale||2; lightMap=lm; lm.encoding=THREE.sRGBEncoding; lm.flipY=false;
+  LMS=bake.lightMapScale||2; lightMap=lm; lm.encoding=THREE.sRGBEncoding; lm.flipY=false; lm.anisotropy=MAXANISO;
   if(lmN){ lmN.encoding=THREE.sRGBEncoding; lmN.flipY=false; LMU.lightMap2.value=lmN; LMU.lmK.value=(bake.nightScale||LMS)/LMS*NIGHT_BOOST; }
   else { LMU.lightMap2.value=lm; LMU.lmK.value=0.35; }
   const root=gltf.scene; scene.add(root);
@@ -609,7 +610,9 @@ Promise.all([
           texLoader.load('assets/photos/living_night.jpg?v='+BUILD,t=>{ t.encoding=THREE.sRGBEncoding; t.flipY=false; LIVU.map2.value=t; m.needsUpdate=true; }); }
         GLOWS.push([m,m.emissiveIntensity,kind]); return m; }
       if(/^Material_0/.test(m.name)){   // photo-scanned props (glove, Rutland): lit straight from the room's HDR capture, not the lightmap
-        const sc=m.clone(); sc.envMapIntensity=1.15; sc.userData.scan=true; return sc; }
+        const sc=m.clone(); sc.envMapIntensity=1.15; sc.userData.scan=true;
+        if(name==='static'){ sc.color.setRGB(0.66,0.6,0.56); sc.envMapIntensity=1.0; }   // scanned furniture (desk chair, pillow): settle into the room's exposure
+        return sc; }
       const k = ud.key ? m.clone() : m;          // clickable things get their own materials for the hover glow
       if(/HaleNavy/.test(k.name)) k.color.multiplyScalar(1.55);
       k.lightMap=lightMap; k.lightMapIntensity=LMS; if(!LIT.includes(k)) LIT.push(k); k.envMapIntensity = k.metalness>0.5 ? 0.9 : 0.1; k.userData.env0=k.envMapIntensity;
@@ -617,6 +620,7 @@ Promise.all([
       k.needsUpdate=true; return k;
     });
     o.material=Array.isArray(o.material)?fixed:fixed[0];
+    fixed.forEach(mt=>['map','emissiveMap','normalMap','roughnessMap','metalnessMap','aoMap'].forEach(k=>{ if(mt[k]){ mt[k].anisotropy=MAXANISO; } }));
     if(ud.key){ keyRoots[ud.key]=grp; if(!interactive.includes(grp)) interactive.push(grp); }
   });
   drawTV(null); root.updateMatrixWorld(true); buildHots(); camera.updateMatrixWorld(); fullOcc();

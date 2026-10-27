@@ -508,7 +508,7 @@ function tintGlows(){
 function lightsUp(f){            // f: 0 = lights off (a little window light), 1 = everything on
   LAMPF=f; const room=0.04+0.96*f; LIT.forEach(mt=>{ mt.lightMapIntensity=LMS*room; if(mt.userData.env0!==undefined) mt.envMapIntensity=mt.userData.env0*(PROBE.on.value?1:(1-0.6*TOD.N)); });
   GLOWS.forEach(([mt,e,kind])=>mt.emissiveIntensity=e*(kind==='view'||kind==='living'?Math.max(f,0.15):f)*glowMult(kind));
-  renderer.toneMappingExposure=(0.45+0.67*f)*(1-0.1*TOD.N); }
+  renderer.toneMappingExposure=(0.45+0.67*f)*(1-0.1*TOD.N)*(1+0.22*(1-TOD.N)); }   // sunny days read brighter
 function applyTOD(){
   const t=todFactors(); TOD.N=t.N; TOD.W=t.W; LMU.lmMix.value=TOD.N; tintGlows(); setEnv(); lightsUp(LAMPF); todLabel(t); }
 const LIVU={map2:{value:null}};
@@ -578,7 +578,7 @@ function stepLights(now){ if(litDone||litStart===null) return;
 const interactive=[], keyRoots={};
 const manager=new THREE.LoadingManager();
 manager.onProgress=(u,l,t)=>{ ldBar.style.width=Math.round(l/t*100)+'%'; };
-const BUILD='b42';   /* bump on every rebake so phones never reuse a cached room */
+const BUILD='b43';   /* bump on every rebake so phones never reuse a cached room */
 const MODEL_URL=(window.OFFICE_MODEL||'office.wasm')+'?v='+BUILD;   /* the GLB, under a name the artifact host serves as raw bytes */
 const loader=new THREE.GLTFLoader(manager), texLoader=new THREE.TextureLoader(manager);
 let lightMap=null, LMS=2.0;

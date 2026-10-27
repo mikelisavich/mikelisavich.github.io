@@ -579,7 +579,7 @@ function stepLights(now){ if(litDone||litStart===null) return;
 const interactive=[], keyRoots={};
 const manager=new THREE.LoadingManager();
 manager.onProgress=(u,l,t)=>{ ldBar.style.width=Math.round(l/t*100)+'%'; };
-const BUILD='b50';   /* bump on every rebake so phones never reuse a cached room */
+const BUILD='b51';   /* bump on every rebake so phones never reuse a cached room */
 const MODEL_URL=(window.OFFICE_MODEL||'office.wasm')+'?v='+BUILD;   /* the GLB, under a name the artifact host serves as raw bytes */
 const loader=new THREE.GLTFLoader(manager), texLoader=new THREE.TextureLoader(manager);
 let lightMap=null, LMS=2.0;
@@ -610,7 +610,7 @@ Promise.all([
           texLoader.load('assets/photos/living_night.jpg?v='+BUILD,t=>{ t.encoding=THREE.sRGBEncoding; t.flipY=false; LIVU.map2.value=t; m.needsUpdate=true; }); }
         GLOWS.push([m,m.emissiveIntensity,kind]); return m; }
       if(/^Material_0/.test(m.name)){   // photo-scanned props (glove, Rutland): lit straight from the room's HDR capture, not the lightmap
-        const sc=m.clone(); sc.envMapIntensity=1.15; sc.userData.scan=true;
+        const sc=m.clone(); sc.envMapIntensity=1.15; sc.userData.scan=true; sc.side=THREE.DoubleSide;   // AI scans have some flipped faces: draw both sides so nothing looks torn
         if(name==='static'){ sc.color.setRGB(0.66,0.6,0.56); sc.envMapIntensity=1.0; }   // scanned furniture (desk chair, pillow): settle into the room's exposure
         return sc; }
       const k = ud.key ? m.clone() : m;          // clickable things get their own materials for the hover glow

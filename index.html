@@ -565,7 +565,7 @@ function fadeTOD(){ const from={N:TOD.N,W:TOD.W}, to=todFactors(), t0=performanc
   requestAnimationFrame(step); }
 { const q=new URLSearchParams(location.search).get('tod'); if(q==='night'||q==='day') TOD.mode=q; }
 setInterval(()=>{ if(TOD.mode==='live') applyTOD(); },60000);
-window.__office={GLOWS,TOD,LMU,PROBE,ENV,LIT};
+window.__office={GLOWS,TOD,LMU,PROBE,ENV,LIT,camera,controls,scene};
 function screensUp(s){ SCREENS.forEach(mt=>mt.color.setScalar(0.04+0.96*s)); }
 function lightCurve(t){          // seconds since the switch: a quick flicker, then a warm ramp
   if(t<0) return 0; if(t<0.08) return 0.7; if(t<0.16) return 0.15; if(t<0.24) return 0.85; if(t<0.32) return 0.45;
@@ -579,7 +579,7 @@ function stepLights(now){ if(litDone||litStart===null) return;
 const interactive=[], keyRoots={};
 const manager=new THREE.LoadingManager();
 manager.onProgress=(u,l,t)=>{ ldBar.style.width=Math.round(l/t*100)+'%'; };
-const BUILD='b52';   /* bump on every rebake so phones never reuse a cached room */
+const BUILD='b53';   /* bump on every rebake so phones never reuse a cached room */
 const MODEL_URL=(window.OFFICE_MODEL||'office.wasm')+'?v='+BUILD;   /* the GLB, under a name the artifact host serves as raw bytes */
 const loader=new THREE.GLTFLoader(manager), texLoader=new THREE.TextureLoader(manager);
 let lightMap=null, LMS=2.0;
@@ -593,6 +593,18 @@ Promise.all([
   if(lmN){ lmN.encoding=THREE.sRGBEncoding; lmN.flipY=false; LMU.lightMap2.value=lmN; LMU.lmK.value=(bake.nightScale||LMS)/LMS*NIGHT_BOOST; }
   else { LMU.lightMap2.value=lm; LMU.lmK.value=0.35; }
   const root=gltf.scene; scene.add(root);
+  /* Window views: each outdoor photo is a finite plane, so from a shallow angle near the wall you could see past its edge
+     into the dark background. Tile it with mirror copies on both sides (mirroring keeps the seams continuous). */
+  root.updateMatrixWorld(true);
+  { const views=[]; root.traverse(o=>{ if(o.isMesh && /ViewBack|ViewRight/.test(o.material.name)) views.push(o); });
+    views.forEach(o=>{ o.material.side=THREE.DoubleSide;
+      o.geometry.computeBoundingBox(); const bb=o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld);
+      const ax=(bb.max.x-bb.min.x)>(bb.max.z-bb.min.z)?'x':'z', lo=bb.min[ax], hi=bb.max[ax], w=hi-lo;
+      const inv=new THREE.Matrix4().copy(o.parent.matrixWorld).invert();
+      [[-1,2*hi],[-1,2*lo],[1,2*w],[1,-2*w]].forEach(([s,t])=>{     // mirror across each edge, then a straight copy beyond each mirror
+        const T=new THREE.Matrix4().makeScale(ax==='x'?s:1,1,ax==='z'?s:1); T.elements[ax==='x'?12:14]=t;
+        const c=new THREE.Mesh(o.geometry,o.material); c.name=o.name+'_tile'; c.matrixAutoUpdate=false;
+        c.matrix.multiplyMatrices(inv,T.multiply(o.matrixWorld)); o.parent.add(c); }); }); }
   root.traverse(o=>{
     if(!o.isMesh) return;
     let grp=o; while(grp.parent && grp.parent!==root) grp=grp.parent;

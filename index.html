@@ -579,7 +579,7 @@ function stepLights(now){ if(litDone||litStart===null) return;
 const interactive=[], keyRoots={};
 const manager=new THREE.LoadingManager();
 manager.onProgress=(u,l,t)=>{ ldBar.style.width=Math.round(l/t*100)+'%'; };
-const BUILD='b54';   /* bump on every rebake so phones never reuse a cached room */
+const BUILD='b55';   /* bump on every rebake so phones never reuse a cached room */
 const MODEL_URL=(window.OFFICE_MODEL||'office.wasm')+'?v='+BUILD;   /* the GLB, under a name the artifact host serves as raw bytes */
 const loader=new THREE.GLTFLoader(manager), texLoader=new THREE.TextureLoader(manager);
 let lightMap=null, LMS=2.0;
@@ -712,8 +712,8 @@ function introSweep(){ if(reduce) return; const keys=Object.keys(keyRoots); let 
   const step=()=>{ if(i>0) setGlow(keys[i-1],false); if(i<keys.length&&!card.classList.contains('on')){ setGlow(keys[i],true); i++; setTimeout(step,160); } };
   step(); HOTS.forEach((ht,j)=>setTimeout(()=>{ ht.el.classList.remove('ping'); void ht.el.offsetWidth; ht.el.classList.add('ping'); },j*140)); settled(); }
 
-const TVPOS=V(X1-0.04,1.50,-0.98);
-const FOCI={ tv:{pos:V(-0.55,1.42,-0.98), target:V(X1,1.24,-0.98)},
+const TVPOS=V(X1-0.04,1.50,-1.159);
+const FOCI={ tv:{pos:V(-0.55,1.42,-1.159), target:V(X1,1.24,-1.159)},
              webcam:{pos:V(-0.07,1.37,0.28), target:V(X0,1.12,0.28)},
              rutland:{pos:V(0.2,1.35,0.6), target:V(0.15,0.55,1.62)} };
 function fly(to,done){ moving(); flying={from:{pos:camera.position.clone(),target:controls.target.clone()},to,start:performance.now(),done}; controls.enabled=false; roomLimits(false); }
@@ -730,7 +730,7 @@ function open(key){
   /* iOS Safari sometimes skips painting new content in a layer mid-transition: nudge a repaint once images settle */
   const kick=()=>{ cardIn.style.transform='translateZ(0.01px)'; requestAnimationFrame(()=>{ cardIn.style.transform=''; }); };
   cardIn.querySelectorAll('img').forEach(im=>{ if(!im.complete) im.addEventListener('load',kick,{once:true}); }); setTimeout(kick,480);
-  const f=c.focus||'tv', portrait=camera.aspect<0.8, dest=(f==='tv'&&portrait)?{pos:V(-0.12,1.47,-0.98),target:V(X1,1.16,-0.98)}:FOCI[f];
+  const f=c.focus||'tv', portrait=camera.aspect<0.8, dest=(f==='tv'&&portrait)?{pos:V(-0.12,1.47,-1.159),target:V(X1,1.16,-1.159)}:FOCI[f];
   if(focus!==f){ focus=f; fly(dest); }
 }
 function closeCard(){ card.classList.remove('on'); viewsEl.hidden=false; }
